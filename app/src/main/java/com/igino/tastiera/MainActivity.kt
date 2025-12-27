@@ -21,9 +21,11 @@ import android.view.MotionEvent
 import android.view.View
 import android.widget.ArrayAdapter
 import android.widget.Button
+import android.widget.LinearLayout
 import android.widget.ListView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -36,6 +38,8 @@ class MainActivity : AppCompatActivity() {
     private var hidDevice: BluetoothHidDevice? = null
     private var hostDevice: BluetoothDevice? = null
 
+    private lateinit var scanLayout: LinearLayout
+    private lateinit var gamepadLayout: ConstraintLayout
     private lateinit var scanButton: Button
     private lateinit var devicesListView: ListView
     private lateinit var listAdapter: ArrayAdapter<String>
@@ -75,8 +79,16 @@ class MainActivity : AppCompatActivity() {
             Log.d(TAG, "onConnectionStateChanged: device=$device, state=$state")
             if (state == BluetoothProfile.STATE_CONNECTED) {
                 hostDevice = device
+                runOnUiThread {
+                    scanLayout.visibility = View.GONE
+                    gamepadLayout.visibility = View.VISIBLE
+                }
             } else if (state == BluetoothProfile.STATE_DISCONNECTED) {
                 hostDevice = null
+                runOnUiThread {
+                    scanLayout.visibility = View.VISIBLE
+                    gamepadLayout.visibility = View.GONE
+                }
             }
         }
     }
@@ -137,9 +149,11 @@ class MainActivity : AppCompatActivity() {
         controller.hide(WindowInsetsCompat.Type.systemBars())
         controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
 
+        scanLayout = findViewById(R.id.scan_layout)
+        gamepadLayout = findViewById(R.id.gamepad_layout)
         scanButton = findViewById(R.id.scan_button)
         devicesListView = findViewById(R.id.devices_list_view)
-        listAdapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, deviceNameList)
+        listAdapter = ArrayAdapter(this, R.layout.list_item_device, deviceNameList)
         devicesListView.adapter = listAdapter
 
         devicesListView.setOnItemClickListener { _, _, position, _ ->
@@ -154,8 +168,14 @@ class MainActivity : AppCompatActivity() {
             startScan()
         }
 
-        val buttonA = findViewById<Button>(R.id.button_a)
-        buttonA.setOnTouchListener(getButtonTouchListener(0))
+        findViewById<Button>(R.id.button_a).setOnTouchListener(getButtonTouchListener(0))
+        findViewById<Button>(R.id.button_b).setOnTouchListener(getButtonTouchListener(1))
+        findViewById<Button>(R.id.button_x).setOnTouchListener(getButtonTouchListener(2))
+        findViewById<Button>(R.id.button_y).setOnTouchListener(getButtonTouchListener(3))
+        findViewById<Button>(R.id.button_up).setOnTouchListener(getDpadTouchListener(0))
+        findViewById<Button>(R.id.button_down).setOnTouchListener(getDpadTouchListener(4))
+        findViewById<Button>(R.id.button_left).setOnTouchListener(getDpadTouchListener(6))
+        findViewById<Button>(R.id.button_right).setOnTouchListener(getDpadTouchListener(2))
 
         val bluetoothManager = getSystemService(BLUETOOTH_SERVICE) as BluetoothManager
         bluetoothAdapter = bluetoothManager.adapter
@@ -211,12 +231,33 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun getDpadTouchListener(direction: Int): View.OnTouchListener {
+        return View.OnTouchListener { view, event ->
+            val isPressed = event.action == MotionEvent.ACTION_DOWN
+            sendDpadState(if (isPressed) direction else 8)
+            if (event.action == MotionEvent.ACTION_UP) {
+                view.performClick()
+            }
+            true
+        }
+    }
+
     private fun sendButtonState(buttonIndex: Int, isPressed: Boolean) {
         hostDevice?.let {
-            val report = ByteArray(4) // x, y, button1-8, button9-16
+            val report = ByteArray(3)
             if (isPressed) {
                 report[2] = (1 shl buttonIndex).toByte()
             }
+            if (!hidDevice?.sendReport(it, HidReportConstants.REPORT_ID, report)!!) {
+                Log.e(TAG, "Failed to send report")
+            }
+        }
+    }
+
+    private fun sendDpadState(direction: Int) {
+        hostDevice?.let {
+            val report = ByteArray(3)
+            report[2] = direction.toByte()
             if (!hidDevice?.sendReport(it, HidReportConstants.REPORT_ID, report)!!) {
                 Log.e(TAG, "Failed to send report")
             }
