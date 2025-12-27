@@ -3,7 +3,6 @@ package com.igino.tastiera
 import android.Manifest
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
-import android.bluetooth.BluetoothClass
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothHidDevice
 import android.bluetooth.BluetoothHidDeviceAppSdpSettings
@@ -48,12 +47,21 @@ class MainActivity : AppCompatActivity() {
 
     private val executor = Executors.newSingleThreadExecutor()
 
+    private val buttonStates = BooleanArray(16) // For 16 buttons
+    private var dpadState: Int = 8 // Neutral position for D-pad
+
     private val permissionRequest = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
-        if (permissions.getOrDefault(Manifest.permission.BLUETOOTH_CONNECT, false) &&
-            permissions.getOrDefault(Manifest.permission.BLUETOOTH_SCAN, false) &&
-            permissions.getOrDefault(Manifest.permission.ACCESS_FINE_LOCATION, false)) {
+        val allGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            permissions.getOrDefault(Manifest.permission.BLUETOOTH_CONNECT, false) &&
+                    permissions.getOrDefault(Manifest.permission.BLUETOOTH_SCAN, false) &&
+                    permissions.getOrDefault(Manifest.permission.ACCESS_FINE_LOCATION, false)
+        } else {
+            permissions.getOrDefault(Manifest.permission.ACCESS_FINE_LOCATION, false)
+        }
+
+        if (allGranted) {
             startBluetoothOperations()
         } else {
             Log.e(TAG, "Permissions not granted")
@@ -68,29 +76,33 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private val hidDeviceCallback = object : BluetoothHidDevice.Callback() {
-        override fun onAppStatusChanged(pluggedDevice: BluetoothDevice?, registered: Boolean) {
-            super.onAppStatusChanged(pluggedDevice, registered)
-            Log.d(TAG, "onAppStatusChanged: registered=$registered, device=$pluggedDevice")
-        }
+    private val hidDeviceCallback: BluetoothHidDevice.Callback? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+        object : BluetoothHidDevice.Callback() {
+            override fun onAppStatusChanged(pluggedDevice: BluetoothDevice?, registered: Boolean) {
+                super.onAppStatusChanged(pluggedDevice, registered)
+                Log.d(TAG, "onAppStatusChanged: registered=$registered, device=$pluggedDevice")
+            }
 
-        override fun onConnectionStateChanged(device: BluetoothDevice, state: Int) {
-            super.onConnectionStateChanged(device, state)
-            Log.d(TAG, "onConnectionStateChanged: device=$device, state=$state")
-            if (state == BluetoothProfile.STATE_CONNECTED) {
-                hostDevice = device
-                runOnUiThread {
-                    scanLayout.visibility = View.GONE
-                    gamepadLayout.visibility = View.VISIBLE
-                }
-            } else if (state == BluetoothProfile.STATE_DISCONNECTED) {
-                hostDevice = null
-                runOnUiThread {
-                    scanLayout.visibility = View.VISIBLE
-                    gamepadLayout.visibility = View.GONE
+            override fun onConnectionStateChanged(device: BluetoothDevice, state: Int) {
+                super.onConnectionStateChanged(device, state)
+                Log.d(TAG, "onConnectionStateChanged: device=$device, state=$state")
+                if (state == BluetoothProfile.STATE_CONNECTED) {
+                    hostDevice = device
+                    runOnUiThread {
+                        scanLayout.visibility = View.GONE
+                        gamepadLayout.visibility = View.VISIBLE
+                    }
+                } else if (state == BluetoothProfile.STATE_DISCONNECTED) {
+                    hostDevice = null
+                    runOnUiThread {
+                        scanLayout.visibility = View.VISIBLE
+                        gamepadLayout.visibility = View.GONE
+                    }
                 }
             }
         }
+    } else {
+        null
     }
 
     private val profileListener = object : BluetoothProfile.ServiceListener {
@@ -99,14 +111,16 @@ class MainActivity : AppCompatActivity() {
                 hidDevice = proxy as BluetoothHidDevice
                 Log.i(TAG, "HID Device profile connected")
 
-                val sdp = BluetoothHidDeviceAppSdpSettings(
-                    "Android Gamepad",
-                    "Gamepad for Android TV",
-                    "Android",
-                    BluetoothClass.Device.Major.PERIPHERAL.toByte(),
-                    HidReportConstants.GAMEPAD_REPORT_DESCRIPTOR
-                )
-                hidDevice?.registerApp(sdp, null, null, executor, hidDeviceCallback)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    val sdp = BluetoothHidDeviceAppSdpSettings(
+                        "Android Gamepad",
+                        "Gamepad for Android TV",
+                        "Android",
+                        0x08.toByte(), // Subclass: Gamepad
+                        HidReportConstants.GAMEPAD_REPORT_DESCRIPTOR
+                    )
+                    hidDevice?.registerApp(sdp, null, null, executor, hidDeviceCallback!!)
+                }
             }
         }
 
@@ -128,11 +142,12 @@ class MainActivity : AppCompatActivity() {
                     intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
                 }
                 device?.let {
-                    if (!deviceList.contains(it)) {
+                    val deviceName = it.name ?: "Unknown"
+                    if (it.name != null && !deviceList.any { d -> d.address == it.address }) {
                         deviceList.add(it)
-                        deviceNameList.add(it.name ?: "Unknown")
+                        deviceNameList.add(deviceName)
                         listAdapter.notifyDataSetChanged()
-                        Log.i(TAG, "Found device: ${it.name ?: "Unknown"} - ${it.address}")
+                        Log.i(TAG, "Found device: $deviceName - ${it.address}")
                     }
                 }
             }
@@ -168,30 +183,35 @@ class MainActivity : AppCompatActivity() {
             startScan()
         }
 
+        // Re-enable all buttons
         findViewById<Button>(R.id.button_a).setOnTouchListener(getButtonTouchListener(0))
         findViewById<Button>(R.id.button_b).setOnTouchListener(getButtonTouchListener(1))
         findViewById<Button>(R.id.button_x).setOnTouchListener(getButtonTouchListener(2))
         findViewById<Button>(R.id.button_y).setOnTouchListener(getButtonTouchListener(3))
-        findViewById<Button>(R.id.button_up).setOnTouchListener(getDpadTouchListener(0))
-        findViewById<Button>(R.id.button_down).setOnTouchListener(getDpadTouchListener(4))
-        findViewById<Button>(R.id.button_left).setOnTouchListener(getDpadTouchListener(6))
-        findViewById<Button>(R.id.button_right).setOnTouchListener(getDpadTouchListener(2))
+
+        findViewById<Button>(R.id.button_up).setOnTouchListener(getDpadTouchListener(0)) // Up
+        findViewById<Button>(R.id.button_down).setOnTouchListener(getDpadTouchListener(4)) // Down
+        findViewById<Button>(R.id.button_left).setOnTouchListener(getDpadTouchListener(6)) // Left
+        findViewById<Button>(R.id.button_right).setOnTouchListener(getDpadTouchListener(2)) // Right
 
         val bluetoothManager = getSystemService(BLUETOOTH_SERVICE) as BluetoothManager
         bluetoothAdapter = bluetoothManager.adapter
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            permissionRequest.launch(arrayOf(
+        val requiredPermissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            arrayOf(
                 Manifest.permission.BLUETOOTH_CONNECT,
                 Manifest.permission.BLUETOOTH_SCAN,
                 Manifest.permission.ACCESS_FINE_LOCATION
-            ))
+            )
         } else {
-            startBluetoothOperations()
+            arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
         }
+        permissionRequest.launch(requiredPermissions)
 
         val filter = IntentFilter(BluetoothDevice.ACTION_FOUND)
         registerReceiver(deviceDiscoveryReceiver, filter)
+
+        startBluetoothOperations()
     }
 
     private fun startBluetoothOperations() {
@@ -217,24 +237,29 @@ class MainActivity : AppCompatActivity() {
 
     private fun connectToDevice(device: BluetoothDevice) {
         Log.i(TAG, "Connecting to ${device.name}")
-        hidDevice?.connect(device)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            hidDevice?.connect(device)
+        }
     }
 
     private fun getButtonTouchListener(buttonIndex: Int): View.OnTouchListener {
         return View.OnTouchListener { view, event ->
-            val isPressed = event.action == MotionEvent.ACTION_DOWN
-            sendButtonState(buttonIndex, isPressed)
-            if (event.action == MotionEvent.ACTION_UP) {
-                view.performClick()
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> buttonStates[buttonIndex] = true
+                MotionEvent.ACTION_UP -> {
+                    buttonStates[buttonIndex] = false
+                    view.performClick()
+                }
             }
+            sendGamepadState()
             true
         }
     }
 
     private fun getDpadTouchListener(direction: Int): View.OnTouchListener {
         return View.OnTouchListener { view, event ->
-            val isPressed = event.action == MotionEvent.ACTION_DOWN
-            sendDpadState(if (isPressed) direction else 8)
+            dpadState = if (event.action == MotionEvent.ACTION_DOWN) direction else 8 // 8 is neutral
+            sendGamepadState()
             if (event.action == MotionEvent.ACTION_UP) {
                 view.performClick()
             }
@@ -242,26 +267,39 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun sendButtonState(buttonIndex: Int, isPressed: Boolean) {
-        hostDevice?.let {
-            val report = ByteArray(3)
-            if (isPressed) {
-                report[2] = (1 shl buttonIndex).toByte()
+    private fun sendGamepadState() {
+        hostDevice?.let { device ->
+            var buttonBits = 0
+            for (i in buttonStates.indices) {
+                if (buttonStates[i]) {
+                    buttonBits = buttonBits or (1 shl i)
+                }
             }
-            if (!hidDevice?.sendReport(it, HidReportConstants.REPORT_ID, report)!!) {
-                Log.e(TAG, "Failed to send report")
-            }
-        }
-    }
 
-    private fun sendDpadState(direction: Int) {
-        hostDevice?.let {
-            val report = ByteArray(3)
-            report[2] = direction.toByte()
-            if (!hidDevice?.sendReport(it, HidReportConstants.REPORT_ID, report)!!) {
-                Log.e(TAG, "Failed to send report")
+            // Report size is 7 bytes:
+            // 2 bytes for buttons
+            // 1 byte for D-Pad
+            // 4 bytes for analog sticks (X, Y, Z, Rz)
+            val report = ByteArray(7)
+            report[0] = (buttonBits and 0xFF).toByte()
+            report[1] = (buttonBits shr 8 and 0xFF).toByte()
+            report[2] = dpadState.toByte()
+            report[3] = 0 // Neutral X
+            report[4] = 0 // Neutral Y
+            report[5] = 0 // Neutral Z
+            report[6] = 0 // Neutral Rz
+
+            val reportString = report.joinToString { "%02X".format(it) }
+            Log.d(TAG, "Attempting to send report: $reportString")
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                if (hidDevice?.sendReport(device, HidReportConstants.REPORT_ID, report) == true) {
+                    Log.d(TAG, "Report sent successfully.")
+                } else {
+                    Log.e(TAG, "Failed to send report.")
+                }
             }
-        }
+        } ?: Log.w(TAG, "sendGamepadState called but no host device connected.")
     }
 
     override fun onDestroy() {
