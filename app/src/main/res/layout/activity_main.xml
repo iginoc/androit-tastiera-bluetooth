@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/main"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@android:color/black"
+    android:orientation="vertical"
+    tools:context=".MainActivity">
+
+    <Button
+        android:id="@+id/scan_button"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Scan for Devices" />
+
+    <ListView
+        android:id="@+id/devices_list_view"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:background="@android:color/white" />
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <!-- D-Pad -->
+        <Button
+            android:id="@+id/button_dpad_center"
+            android:layout_width="1dp"
+            android:layout_height="1dp"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toStartOf="@id/guideline_center"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent"
+            android:visibility="invisible"/>
+
+        <Button
+            android:id="@+id/button_up"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Up"
+            app:layout_constraintBottom_toTopOf="@+id/button_dpad_center"
+            app:layout_constraintStart_toStartOf="@+id/button_dpad_center"
+            app:layout_constraintEnd_toEndOf="@+id/button_dpad_center" />
+
+        <Button
+            android:id="@+id/button_down"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Down"
+            app:layout_constraintTop_toBottomOf="@+id/button_dpad_center"
+            app:layout_constraintStart_toStartOf="@+id/button_dpad_center"
+            app:layout_constraintEnd_toEndOf="@+id/button_dpad_center" />
+
+        <Button
+            android:id="@+id/button_left"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Left"
+            app:layout_constraintEnd_toStartOf="@+id/button_dpad_center"
+            app:layout_constraintTop_toTopOf="@+id/button_dpad_center"
+            app:layout_constraintBottom_toBottomOf="@+id/button_dpad_center" />
+
+        <Button
+            android:id="@+id/button_right"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Right"
+            app:layout_constraintStart_toEndOf="@+id/button_dpad_center"
+            app:layout_constraintTop_toTopOf="@+id/button_dpad_center"
+            app:layout_constraintBottom_toBottomOf="@+id/button_dpad_center" />
+
+        <!-- Action Buttons -->
+        <Button
+            android:id="@+id/button_action_center"
+            android:layout_width="1dp"
+            android:layout_height="1dp"
+            app:layout_constraintStart_toEndOf="@id/guideline_center"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent"
+            android:visibility="invisible"/>
+
+        <Button
+            android:id="@+id/button_y"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Y"
+            app:layout_constraintBottom_toTopOf="@+id/button_action_center"
+            app:layout_constraintStart_toStartOf="@+id/button_action_center"
+            app:layout_constraintEnd_toEndOf="@+id/button_action_center" />
+
+        <Button
+            android:id="@+id/button_b"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="B"
+            app:layout_constraintTop_toBottomOf="@+id/button_action_center"
+            app:layout_constraintStart_toStartOf="@+id/button_action_center"
+            app:layout_constraintEnd_toEndOf="@+id/button_action_center" />
+
+        <Button
+            android:id="@+id/button_x"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="X"
+            app:layout_constraintEnd_toStartOf="@+id/button_action_center"
+            app:layout_constraintTop_toTopOf="@+id/button_action_center"
+            app:layout_constraintBottom_toBottomOf="@+id/button_action_center" />
+
+        <Button
+            android:id="@+id/button_a"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="A"
+            app:layout_constraintStart_toEndOf="@+id/button_action_center"
+            app:layout_constraintTop_toTopOf="@+id/button_action_center"
+            app:layout_constraintBottom_toBottomOf="@+id/button_action_center" />
+
+        <androidx.constraintlayout.widget.Guideline
+            android:id="@+id/guideline_center"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            app:layout_constraintGuide_percent="0.5" />
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+</LinearLayout>
